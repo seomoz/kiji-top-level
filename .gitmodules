@@ -13,9 +13,6 @@
 [submodule "hbase-maven-plugin"]
 	path = hbase-maven-plugin
 	url = git://github.com/kijiproject/hbase-maven-plugin.git
-[submodule "kiji-archetype"]
-	path = kiji-archetype
-	url = git://github.com/kijiproject/kiji-archetype.git
 [submodule "kiji-avro"]
 	path = kiji-avro
 	url = git://github.com/kijiproject/kiji-avro.git
