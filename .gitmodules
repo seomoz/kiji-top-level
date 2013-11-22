@@ -88,3 +88,6 @@
 [submodule "kiji-modeling"]
 	path = kiji-modeling
 	url = git://github.com/kijiproject/kiji-modeling.git
+[submodule "kiji-scoring-server"]
+	path = kiji-scoring-server
+	url = git://github.com/kijiproject/kiji-scoring-server.git
