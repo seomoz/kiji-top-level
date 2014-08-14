@@ -5,6 +5,32 @@ set -e
 
 date
 
+# Bring in a common environment, including $PLATFORM
+. /etc/profile
+
+echo Running ${COMPONENT:-all} tests on platform $PLATFORM
+
+# Some of the builds are bottoming out on permgem, so dial it up a little by default.
+export MAVEN_OPTS="${MAVEN_OPTS:--XX:MaxPermSize=64m}"
+
+# A helper for robustly prodding maven to download most of what it needs. This
+# function doesn't fail if something can't be downloaded; that failure will
+# appear in the subsequent (actual) mvn build commands.
+function download-mvn-deps {
+  # Travis has to see output periodically or it will kill us.
+  ( while true; do sleep 30; echo Downloading...; done ) &
+
+  # Try to compile the code & tests up to 5 times with 15-45 second delays on failure.
+  for i in {1..5}
+  do
+    mvn test-compile >/dev/null && break || true
+    sleep $(( 15 + $RANDOM % 30 ))
+  done
+
+  # Turn off the beeper.
+  kill %1
+}
+
 # Descend into chosen sub projects and run their integration test suites.
 # One can pick a particular sub project with the COMPONENT environment variable.
 
@@ -12,28 +38,110 @@ if [[ "${COMPONENT:-kiji-schema}" == 'kiji-schema' ]]
 then
   pushd kiji-schema
 
-  # Prevent a problem with cleanup.log and the enforcer plugin
-  # See https://groups.google.com/a/kiji.org/d/topic/dev/_iNQBJa0lCc/discussion
-  mkdir -p kiji-schema/target
-  echo -n > kiji-schema/target/cleanup.log
+  # Eagerly try to download everything needed
+  download-mvn-deps
 
-  mvn verify \
-    -Dkiji.test.cluster.uri=kiji://localhost:2181/                \
-    -Dorg.kiji.schema.test.cleanup.after.test=false               \
-    -Dmaven.javadoc.skip                                          \
-    -Dcheckstyle.skip=true                                        \
-    -DskipUnitTests
+  case "$PLATFORM" in
+  cdh*)
+    # Prevent a problem with cleanup.log and the enforcer plugin
+    # See https://groups.google.com/a/kiji.org/d/topic/dev/_iNQBJa0lCc/discussion
+    mkdir -p kiji-schema/target
+    echo -n > kiji-schema/target/cleanup.log
+
+    projects=$(echo \
+      build-resources       \
+      platform-api          \
+      cdh41mr1-bridge       \
+      cdh42mr1-bridge       \
+      cdh5mr1-bridge        \
+      kiji-schema           \
+      profiling             \
+      kiji-schema-extras    \
+      kiji-schema-archetype \
+      | tr ' ' ,)
+
+    mvn verify \
+      --projects $projects                                                      \
+      -Dkiji.test.cluster.uri=kiji://localhost:2181/                            \
+      -DargLine="-Dorg.kiji.schema.KijiClientTest.HBASE_ADDRESS=localhost:2181" \
+      -Dmaven.javadoc.skip                                                      \
+      -Dcheckstyle.skip=true                                                    \
+      -Dmaven.findbugs.failOnError=false                                        \
+      -DskipUnitTests
+    ;;
+  # cassandra*)
+  #   mkdir -p kiji-schema-cassandra/target
+  #   echo -n > kiji-schema-cassandra/target/cleanup.log
+
+  #   projects=$(echo \
+  #     ???
+  #     kiji-schema-cassandra \
+  #     ???
+  #     | tr ' ' ,)
+
+  #   mvn verify \
+  #     --projects $projects                                                      \
+  #     -Dmaven.javadoc.skip                                                      \
+  #     -Dcheckstyle.skip=true                                                    \
+  #     -Dmaven.findbugs.failOnError=false                                        \
+  #     -DskipUnitTests
+  #   ;;
+  *)
+    echo "Don't know how to test kiji-schema on platform $PLATFORM"
+    exit 1
+    ;;
+  esac
+
   popd
 fi
 
 if [[ "${COMPONENT:-kiji-mapreduce}" == 'kiji-mapreduce' ]]
 then
   pushd kiji-mapreduce
-  mvn verify \
-    -Dkiji.test.cluster.uri=kiji://localhost:2181/                \
-    -Dorg.kiji.schema.test.cleanup.after.test=false               \
-    -Dmaven.javadoc.skip                                          \
-    -Dcheckstyle.skip=true                                        \
-    -DskipUnitTests
+
+  # Eagerly try to download everything needed
+  download-mvn-deps
+
+  case "$PLATFORM" in
+  cdh*)
+    projects=$(echo \
+      build-resources           \
+      platform-api              \
+      cdh4mr1-bridge            \
+      hadoop2-hbase96-bridge    \
+      kiji-mapreduce            \
+      profiling                 \
+      kiji-mapreduce-archetype  \
+      | tr ' ' ,)
+
+    mvn verify \
+      --projects $projects                                                      \
+      -Dkiji.test.cluster.uri=kiji://localhost:2181/                            \
+      -DargLine="-Dorg.kiji.schema.KijiClientTest.HBASE_ADDRESS=localhost:2181" \
+      -Dmaven.javadoc.skip                                                      \
+      -Dcheckstyle.skip=true                                                    \
+      -Dmaven.findbugs.failOnError=false                                        \
+      -DskipUnitTests
+    ;;
+  # cassandra*)
+  #   projects=$(echo \
+  #       ???
+  #       kiji-mapreduce-cassandra  \
+  #       ???
+  #       | tr ' ' ,)
+
+  #   mvn verify \
+  #     --projects $projects                                                      \
+  #     -Dmaven.javadoc.skip                                                      \
+  #     -Dcheckstyle.skip=true                                                    \
+  #     -Dmaven.findbugs.failOnError=false                                        \
+  #     -DskipUnitTests
+  #   ;;
+  *)
+    echo "Don't know how to test kiji-mapreduce on platform $PLATFORM"
+    exit 1
+    ;;
+  esac
+
   popd
 fi

@@ -42,6 +42,16 @@ sudo tee /etc/profile.d/java.sh <<'EOF'
 JAVA_HOME=/usr/lib/jvm/java-7-oracle
 EOF
 
+# Note the user's choice of platform
+sudo tee /etc/profile.d/kiji-platform.sh <<EOF
+PLATFORM="$PLATFORM"
+EOF
+
+# Dial up some maven memory settings
+sudo tee /etc/profile.d/maven-permgen.sh <<EOF
+MAVEN_OPTS="-Xmx512m -XX:MaxPermSize=128m"
+EOF
+
 # Tweak the ruby prompts for hbase shell
 cat > /home/vagrant/.irbrc <<'EOF'
 require 'pp'
